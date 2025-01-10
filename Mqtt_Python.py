@@ -20,8 +20,9 @@ def read_and_output_image_info(image_path):
             # 獲取 RGB 資料
             rgb_array = np.array(img)
             return width, height, rgb_array
-    except:
-        print('Error')
+    except Exception as e:
+        print(f"Error reading image: {e}")
+        return 0, 0, np.array([])
 
 # 當客戶端連接到 Broker 時觸發的事件
 def on_connect(client, userdata, flags, rc):
@@ -36,6 +37,8 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     print(f"[接收] 主題: {msg.topic}, 訊息: {msg.payload.decode()}")
     width, height, image_data = read_and_output_image_info(msg.payload.decode())
+    if width == 0 or height == 0:
+        return
     output_h_w = f'輸入圖片:{width}*{height}'
     client.publish(TOPIC_PUBLISH, output_h_w)
     print(output_h_w)
@@ -91,39 +94,4 @@ print("嘗試連接到 MQTT Broker...")
 client.connect(BROKER, PORT, keepalive=60)
 
 # 啟動非同步處理循環
-client.loop_start()
-
-# 發佈與接收訊息
-try:
-    while True:
-        time.sleep(0.1)  # 避免 CPU 占用過高
-        message = input("[發送] 輸入要發佈的檔案名 (輸入 'exit' 結束): ")
-        if message.lower() == "exit":
-            break
-        width, height, image_data = read_and_output_image_info(message)
-        client.publish(TOPIC_PUBLISH, f'輸入圖片:{width}*{height}')
-        time.sleep(0.1)  # 避免 CPU 占用過高
-        chunk_size = 60
-        # 將 image_data 展平成所需格式
-        formatted_data = []
-        for i in range(height):
-            for j in range(width):
-                pixel = image_data[i][j]
-                formatted_data.append(','.join(map(str, pixel)))  # 將每個像素的 [R, G, B] 合併成 'R,G,B'
-
-        # 將展平的資料組合成字串
-        formatted_string = ' '.join(formatted_data)
-
-        # 按 chunk_size 分段發送
-        for i in range(0, len(formatted_string), chunk_size):
-            chunk = formatted_string[i:i + chunk_size]
-            client.publish(TOPIC_PUBLISH, chunk)
-            print(f"[發送] 已發佈訊息: {i} 到主題: {TOPIC_PUBLISH}")
-            time.sleep(0.1)
-except KeyboardInterrupt:
-    print("\n程式中止")
-finally:
-    # 停止客戶端
-    client.loop_stop()
-    client.disconnect()
-    print("已關閉 MQTT 連線")
+client.loop_forever()
